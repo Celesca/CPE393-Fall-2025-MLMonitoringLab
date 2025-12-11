@@ -1,0 +1,6 @@
+artifact_location: mlflow-artifacts:/638717025193314343
+creation_time: 1761750408648
+experiment_id: '638717025193314343'
+last_update_time: 1761750408648
+lifecycle_stage: active
+name: mlflow-evidently-lab

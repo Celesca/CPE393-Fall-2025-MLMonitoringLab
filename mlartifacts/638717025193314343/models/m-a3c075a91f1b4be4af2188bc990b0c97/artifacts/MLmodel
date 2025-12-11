@@ -1,0 +1,41 @@
+artifact_path: mlflow-artifacts:/638717025193314343/models/m-a3c075a91f1b4be4af2188bc990b0c97/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.10
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.7.2
+is_signature_from_type_hint: false
+mlflow_version: 3.5.1
+model_id: m-a3c075a91f1b4be4af2188bc990b0c97
+model_size_bytes: 5018
+model_uuid: m-a3c075a91f1b4be4af2188bc990b0c97
+prompts: null
+run_id: 87272b2448294c29ba29f07e44171382
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "f0", "required": true}, {"type": "double",
+    "name": "f1", "required": true}, {"type": "double", "name": "f2", "required":
+    true}, {"type": "double", "name": "f3", "required": true}, {"type": "double",
+    "name": "f4", "required": true}, {"type": "double", "name": "f5", "required":
+    true}, {"type": "double", "name": "f6", "required": true}, {"type": "double",
+    "name": "f7", "required": true}, {"type": "double", "name": "f8", "required":
+    true}, {"type": "double", "name": "f9", "required": true}, {"type": "double",
+    "name": "f10", "required": true}, {"type": "double", "name": "f11", "required":
+    true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "int64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2025-10-29 15:06:51.436791'

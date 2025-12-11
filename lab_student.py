@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, roc_curve, confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 
@@ -31,12 +32,27 @@ def load_data():
     cur = pd.read_csv(DATA_DIR / "test.csv")
     return ref, cur
 
-def build_pipeline():
-    # TODO: you may try different models or parameters
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=1000, n_jobs=None))
-    ])
+def build_pipeline(model_type="lr"):
+    """
+    Build a pipeline with a specified model.
+    
+    Args:
+        model_type (str): "lr" for LogisticRegression, "rf" for RandomForest
+    
+    Returns:
+        Pipeline: sklearn Pipeline with scaler and classifier
+    """
+    if model_type == "rf":
+        # RandomForest doesn't require scaling, but we include it for consistency
+        model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1))
+        ])
+    else:  # default to LogisticRegression
+        model = Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", LogisticRegression(max_iter=1000, n_jobs=None))
+        ])
     return model
 
 def train_and_log(ref_df, cur_df):
@@ -47,15 +63,59 @@ def train_and_log(ref_df, cur_df):
     X_test = cur_df.drop(columns=[target])
     y_test = cur_df[target].astype(int)
 
-    # ---- MLflow run ----
-    with mlflow.start_run(run_name="baseline_LR"):
-        model = build_pipeline()
+    # Train and log both models
+    models_config = [
+        {
+            "name": "baseline_LR",
+            "model_type": "lr",
+            "params": {
+                "model": "LogisticRegression",
+                "scaler": "StandardScaler",
+                "penalty": "l2",
+                "C": 1.0,
+                "max_iter": 1000
+            }
+        },
+        {
+            "name": "baseline_RF",
+            "model_type": "rf",
+            "params": {
+                "model": "RandomForestClassifier",
+                "scaler": "StandardScaler",
+                "n_estimators": 100,
+                "random_state": 42
+            }
+        }
+    ]
+    
+    for config in models_config:
+        _train_single_model(
+            X_train, y_train, X_test, y_test, 
+            ref_df, cur_df, target,
+            config["name"], config["model_type"], config["params"]
+        )
 
-        # TODO: log your chosen hyperparameters explicitly
-        mlflow.log_param("model", "LogisticRegression")
-        mlflow.log_param("scaler", "StandardScaler")
-        mlflow.log_param("penalty", "l2")
-        mlflow.log_param("C", 1.0)
+
+def _train_single_model(X_train, y_train, X_test, y_test, ref_df, cur_df, target, run_name, model_type, params):
+    """
+    Train and log a single model to MLflow.
+    
+    Args:
+        X_train, y_train: Training data
+        X_test, y_test: Test data
+        ref_df, cur_df: Reference and current dataframes for Evidently
+        target: Target column name
+        run_name: Name of the MLflow run
+        model_type: Type of model ("lr" or "rf")
+        params: Dictionary of parameters to log
+    """
+    # ---- MLflow run ----
+    with mlflow.start_run(run_name=run_name):
+        model = build_pipeline(model_type=model_type)
+
+        # Log hyperparameters
+        for param_name, param_value in params.items():
+            mlflow.log_param(param_name, param_value)
 
         model.fit(X_train, y_train)
 
@@ -77,7 +137,7 @@ def train_and_log(ref_df, cur_df):
         cm = confusion_matrix(y_test, y_pred)
         fig = plt.figure()
         plt.imshow(cm, interpolation="nearest")
-        plt.title("Confusion Matrix")
+        plt.title(f"Confusion Matrix - {run_name}")
         plt.colorbar()
         tick_marks = np.arange(2)
         plt.xticks(tick_marks, ["0","1"])
@@ -87,7 +147,7 @@ def train_and_log(ref_df, cur_df):
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
                 plt.text(j, i, cm[i, j], ha="center", va="center")
-        fig_path = REPORTS_DIR / "confusion_matrix.png"
+        fig_path = REPORTS_DIR / f"confusion_matrix_{run_name}.png"
         plt.tight_layout()
         plt.savefig(fig_path, dpi=150)
         plt.close(fig)
@@ -99,10 +159,10 @@ def train_and_log(ref_df, cur_df):
             fig2 = plt.figure()
             plt.plot(fpr, tpr, label="ROC")
             plt.plot([0,1],[0,1], linestyle="--")
-            plt.title("ROC Curve")
+            plt.title(f"ROC Curve - {run_name}")
             plt.xlabel("False Positive Rate")
             plt.ylabel("True Positive Rate")
-            roc_path = REPORTS_DIR / "roc_curve.png"
+            roc_path = REPORTS_DIR / f"roc_curve_{run_name}.png"
             plt.tight_layout()
             plt.savefig(roc_path, dpi=150)
             plt.close(fig2)
@@ -117,9 +177,9 @@ def train_and_log(ref_df, cur_df):
 
         mlflow.sklearn.log_model(
             model,
-            artifact_path="model",       # MLflow still accepts artifact_path here
-            input_example=input_example, # <-- ADDED
-            signature=signature          # <-- ADDED
+            artifact_path="model",
+            input_example=input_example,
+            signature=signature
         )
 
         # ---- Evidently report ----
@@ -149,12 +209,12 @@ def train_and_log(ref_df, cur_df):
         report = Report(metrics=[
             DataDriftPreset(),
             TargetDriftPreset(),
-            ClassificationPreset()  # 0.4.33 name
+            ClassificationPreset()
         ])
         report.run(reference_data=ref_df_copy, current_data=cur_df_copy, column_mapping=column_mapping)
 
-        html_path = REPORTS_DIR / "evidently_report.html"
-        json_path = REPORTS_DIR / "evidently_report.json"
+        html_path = REPORTS_DIR / f"evidently_report_{run_name}.html"
+        json_path = REPORTS_DIR / f"evidently_report_{run_name}.json"
         report.save_html(str(html_path))
         report.save_json(str(json_path))
 
@@ -162,7 +222,29 @@ def train_and_log(ref_df, cur_df):
         mlflow.log_artifact(str(html_path))
         mlflow.log_artifact(str(json_path))
 
-        print("Run complete. Check MLflow UI and the reports/ folder.")
+        # ---- Log additional metrics for monitoring ----
+        # Calculate and log class distribution metrics
+        current_pos_ratio = (y_test == 1).sum() / len(y_test)
+        reference_pos_ratio = (y_train == 1).sum() / len(y_train)
+        
+        mlflow.log_metric("reference_positive_ratio", float(reference_pos_ratio))
+        mlflow.log_metric("current_positive_ratio", float(current_pos_ratio))
+        mlflow.log_metric("class_distribution_drift", float(abs(current_pos_ratio - reference_pos_ratio)))
+        
+        # Calculate recall and precision for monitoring
+        from sklearn.metrics import precision_score, recall_score
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        mlflow.log_metric("precision", float(precision))
+        mlflow.log_metric("recall", float(recall))
+        
+        print(f"Run '{run_name}' complete.")
+        print(f"  Accuracy: {acc:.4f}")
+        print(f"  F1 Score: {f1:.4f}")
+        print(f"  Precision: {precision:.4f}")
+        print(f"  Recall: {recall:.4f}")
+        print(f"  Class Distribution Drift: {abs(current_pos_ratio - reference_pos_ratio):.4f}")
+        print(f"Check MLflow UI and the reports/ folder.")
 
 if __name__ == "__main__":
     ref, cur = load_data()

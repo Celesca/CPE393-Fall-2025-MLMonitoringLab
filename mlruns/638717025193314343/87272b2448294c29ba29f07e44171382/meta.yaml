@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/638717025193314343/87272b2448294c29ba29f07e44171382/artifacts
+end_time: 1761750422662
+entry_point_name: ''
+experiment_id: '638717025193314343'
+lifecycle_stage: active
+run_id: 87272b2448294c29ba29f07e44171382
+run_name: baseline_LR
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761750409465
+status: 3
+tags: []
+user_id: Sawit
